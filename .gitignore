@@ -45,12 +45,20 @@ htmlcov/
 
 # Node.js / Next.js / Frontend
 node_modules/
+dashboard/node_modules/
 .next/
+dashboard/.next/
 out/
+dashboard/out/
 build/
 dist/
 .turbo/
 .cache/
+*.chunk.js
+
+# Built Static Dashboard Web Assets (except .gitkeep)
+core/agentsentrix/web/*
+!core/agentsentrix/web/.gitkeep
 
 # Logs
 *.log
@@ -85,4 +93,3 @@ data/*.duckdb.wal
 # MLflow Experiment Tracking Runs
 mlruns/
 .mlruns/
-
