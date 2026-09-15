@@ -1,4 +1,12 @@
 # schema/ws.py
+from enum import Enum
+from datetime import datetime, timezone
+from typing import Any
+from pydantic import BaseModel, Field
+
+def _now() -> datetime:
+    return datetime.now(timezone.utc)
+
 class WsType(str, Enum):
     HELLO = "hello"
     SNAPSHOT = "snapshot"

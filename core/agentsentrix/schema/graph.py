@@ -1,4 +1,9 @@
 # schema/graph.py
+from datetime import datetime, timezone
+from typing import Any
+from pydantic import BaseModel, Field
+from .enums import NodeKind, Verdict
+
 class GraphNode(BaseModel):
     id: str                  # "agent:refactor-01" / "file:/repo/.env"
     kind: NodeKind

@@ -18,7 +18,11 @@ class QuarantineManager:
 
     def create_quarantine_future(self, event_id: str, event_data: Optional[dict[str, Any]] = None) -> asyncio.Future[dict[str, Any]]:
         """Create and store an asyncio.Future for a quarantined event and sync to StateCache."""
-        loop = asyncio.get_running_loop()
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = asyncio.get_event_loop()
+
         future: asyncio.Future[dict[str, Any]] = loop.create_future()
         self.pending_futures[event_id] = future
         logger.info(f"Created quarantine future for event_id: {event_id}")
