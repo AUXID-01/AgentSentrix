@@ -70,6 +70,71 @@ def status():
     except Exception:
         typer.secho("AgentSentrix gateway is STOPPED or unreachable on port 7777", fg=typer.colors.YELLOW)
 
+@app.command("record")
+def record(
+    output: str = typer.Option("data/seed/demo_session.jsonl", "--output", "-o", help="Target output .jsonl trace file"),
+    delay_ms: float = typer.Option(800.0, "--delay-ms", help="Step delay in milliseconds")
+):
+    """Record a full live 4-agent simulation session into an offline-ready trace file (.jsonl)."""
+    import asyncio
+    import json
+    try:
+        from sim.runner import SimulationRunner
+    except ModuleNotFoundError:
+        typer.secho("Error importing SimulationRunner.", fg=typer.colors.RED)
+        raise typer.Exit(1)
+
+    typer.secho(f"\n[+] Recording live simulation trace into '{output}'...", fg=typer.colors.CYAN, bold=True)
+    runner = SimulationRunner()
+    res = asyncio.run(runner.run_scenario(step_delay_ms=delay_ms))
+
+    os.makedirs(os.path.dirname(os.path.abspath(output)), exist_ok=True)
+    with open(output, "w", encoding="utf-8") as f:
+        for evt in res.events:
+            f.write(json.dumps(evt) + "\n")
+
+    typer.secho(f"✓ Recorded {len(res.events)} telemetry events to '{output}'", fg=typer.colors.GREEN, bold=True)
+
+@app.command("replay")
+def replay(
+    file: str = typer.Argument("data/seed/demo_session.jsonl", help="Path to recorded session trace .jsonl file"),
+    speed: float = typer.Option(1.0, "--speed", "-s", help="Replay speed multiplier (e.g. 1.5)"),
+    host: str = typer.Option("127.0.0.1", "--host", "-h", help="Host address to bind server"),
+    port: int = typer.Option(7777, "--port", "-p", help="Port number for server & dashboard"),
+    open_browser: bool = typer.Option(True, "--open/--no-open", help="Automatically open web browser")
+):
+    """Replay a recorded session trace through the live bus and 3D dashboard (works 100% offline)."""
+    if not os.path.exists(file):
+        typer.secho(f"Error: Replay trace file '{file}' not found.", fg=typer.colors.RED, bold=True)
+        raise typer.Exit(1)
+
+    url = f"http://{host}:{port}"
+    typer.secho(f"\n[+] Starting AgentSentrix Offline Replay Engine at {url}", fg=typer.colors.CYAN, bold=True)
+    typer.secho(f"    * Trace File    : {file}")
+    typer.secho(f"    * Speed Factor  : x{speed}")
+    typer.secho(f"    * Dashboard UI  : {url}\n", fg=typer.colors.GREEN)
+
+    if open_browser:
+        def _open():
+            time.sleep(1.2)
+            try:
+                webbrowser.open(url)
+            except Exception:
+                pass
+        threading.Thread(target=_open, daemon=True).start()
+
+    try:
+        from agentsentrix.server.app import create_app
+    except ModuleNotFoundError:
+        from core.agentsentrix.server.app import create_app
+
+    app_instance = create_app(replay_file=file, speed=speed)
+
+    try:
+        uvicorn.run(app_instance, host=host, port=port)
+    except (KeyboardInterrupt, SystemExit):
+        typer.secho("\n[+] AgentSentrix Replay Engine stopped cleanly.", fg=typer.colors.YELLOW)
+
 def main():
     app()
 
