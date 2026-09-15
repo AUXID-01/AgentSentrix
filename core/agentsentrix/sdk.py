@@ -1,4 +1,5 @@
 import functools
+import inspect
 import logging
 import uuid
 import warnings
@@ -53,7 +54,7 @@ class AgentSentrixSDK:
         Supports both async and synchronous functions.
         """
         def decorator(func: Callable) -> Callable:
-            if functools.iscoroutinefunction(func):
+            if inspect.iscoroutinefunction(func):
                 @functools.wraps(func)
                 async def async_wrapper(*args, **kwargs) -> Any:
                     target_str = str(kwargs) if kwargs else (str(args[0]) if args else func.__name__)

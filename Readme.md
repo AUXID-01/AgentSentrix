@@ -4,7 +4,7 @@
 
 [![Python Version](https://img.shields.io/badge/python-3.10%2B-blue.svg)](https://www.python.org/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Version](https://img.shields.io/badge/version-0.1.0-emerald.svg)](https://pypi.org/project/agentsentrix/)
+[![Version](https://img.shields.io/badge/version-0.1.1-emerald.svg)](https://pypi.org/project/agentsentrix/)
 
 ---
 

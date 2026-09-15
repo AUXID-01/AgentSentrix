@@ -4,7 +4,7 @@ AgentSentrix — Real-Time Agentic Security Framework & Threat Visualization Eng
 
 from .sdk import AgentSentrixSDK, SecurityBlockError, QuarantineTimeoutError
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 __all__ = [
     "AgentSentrixSDK",
     "SecurityBlockError",
