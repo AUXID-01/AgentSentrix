@@ -6,9 +6,10 @@ from fastapi.responses import FileResponse
 
 logger = logging.getLogger("agentsentrix.server.static")
 
-def mount_static_files(app: FastAPI, web_dir: str = "core/agentsentrix/web") -> None:
+def mount_static_files(app: FastAPI, web_dir: str = "dashboard/out") -> None:
     """Mount static dashboard assets to serve Next.js export on root UI routes."""
-    abs_web_dir = os.path.abspath(web_dir)
+    target_dir = web_dir if os.path.exists(web_dir) else "core/agentsentrix/web"
+    abs_web_dir = os.path.abspath(target_dir)
     if not os.path.exists(abs_web_dir):
         os.makedirs(abs_web_dir, exist_ok=True)
         # Create dummy index.html if empty
@@ -25,5 +26,6 @@ def mount_static_files(app: FastAPI, web_dir: str = "core/agentsentrix/web") -> 
             return FileResponse(index_path)
         return {"message": "AgentSentrix Dashboard Placeholder"}
 
+    app.mount("/_next", StaticFiles(directory=os.path.join(abs_web_dir, "_next")), name="static_next") if os.path.exists(os.path.join(abs_web_dir, "_next")) else None
     app.mount("/out", StaticFiles(directory=abs_web_dir, html=True), name="static_out")
     logger.info(f"[Static] Mounted web dashboard static files from {abs_web_dir}")

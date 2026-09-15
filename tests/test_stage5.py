@@ -49,6 +49,15 @@ async def test_events_endpoint(client: TestClient):
     assert "events" in data
     assert data["total_count"] >= 5
 
+def test_events_ingest_endpoint(client: TestClient):
+    event = make_test_event(88)
+    payload = event.model_dump(mode="json")
+    response = client.post("/events/ingest", json=payload)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["status"] == "ingested"
+    assert data["event_id"] == "evt_s5_088"
+
 @pytest.mark.asyncio
 async def test_graph_endpoint(client: TestClient):
     bus = client.app.state.bus

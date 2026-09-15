@@ -9,7 +9,17 @@ class DuckDBSink:
     def __init__(self, db_path: str = "data/agentsentrix.duckdb") -> None:
         self.db_path = db_path
         os.makedirs(os.path.dirname(os.path.abspath(db_path)), exist_ok=True)
-        self.con = duckdb.connect(self.db_path)
+        try:
+            self.con = duckdb.connect(self.db_path)
+        except Exception as exc:
+            import warnings
+            warnings.warn(
+                f"[DuckDBSink] Unable to lock DuckDB database file '{db_path}' ({exc}). "
+                f"Falling back to an in-memory instance (:memory:) to prevent process crash.",
+                UserWarning,
+                stacklevel=2
+            )
+            self.con = duckdb.connect(":memory:")
         self._init_db()
 
     def _init_db(self) -> None:

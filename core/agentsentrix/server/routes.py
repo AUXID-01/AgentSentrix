@@ -40,10 +40,29 @@ async def get_health(request: Request) -> dict[str, Any]:
 
     return {
         "status": "healthy",
+        "redis": redis_ok,
         "redis_connected": redis_ok,
+        "duckdb": duckdb_count > 0 or (duckdb_sink is not None),
         "duckdb_event_count": duckdb_count,
         "bus_current_seq": bus_seq
     }
+
+@router.post("/events/ingest")
+async def ingest_event(request: Request, event_dict: dict[str, Any]) -> dict[str, Any]:
+    """Ingest external AgentEvent telemetry from simulation runner or sensors into active server pipeline."""
+    bus = getattr(request.app.state, "bus", None)
+    if not bus:
+        raise HTTPException(status_code=500, detail="EventBus unavailable on server")
+    
+    try:
+        from ..schema.events import AgentEvent
+        event = AgentEvent.model_validate(event_dict)
+        await bus.publish(event)
+        logger.info(f"[REST] /events/ingest -> Event '{event.id}' ingested successfully.")
+        return {"status": "ingested", "event_id": event.id, "seq": event.seq}
+    except Exception as exc:
+        logger.error(f"[REST] /events/ingest validation/publish error: {exc}")
+        raise HTTPException(status_code=400, detail=f"Failed to ingest event: {exc}")
 
 @router.get("/events")
 async def get_events(

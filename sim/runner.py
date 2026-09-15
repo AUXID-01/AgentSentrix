@@ -92,6 +92,30 @@ class SimulationRunner:
                 await self.bus.publish(event)
                 events_emitted.append(event)
 
+                # Send event to running server for live 3D WebSocket visual streaming (non-blocking)
+                async def _post_event_bg(evt_data: dict):
+                    try:
+                        import urllib.request, json, asyncio
+                        payload = json.dumps(evt_data).encode("utf-8")
+                        req = urllib.request.Request(
+                            "http://localhost:8000/events/ingest",
+                            data=payload,
+                            headers={"Content-Type": "application/json"},
+                            method="POST"
+                        )
+                        def _sync_post():
+                            try:
+                                with urllib.request.urlopen(req, timeout=0.1) as resp:
+                                    pass
+                            except Exception:
+                                pass
+                        loop = asyncio.get_running_loop()
+                        await loop.run_in_executor(None, _sync_post)
+                    except Exception:
+                        pass
+
+                asyncio.create_task(_post_event_bg(event.model_dump(mode="json")))
+
                 # Track previous event for call stack lineage chain
                 last_event_id = event.id
 
