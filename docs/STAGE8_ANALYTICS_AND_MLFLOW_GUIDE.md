@@ -16,11 +16,22 @@ Stage 8 adds **Big-Data Security Analytics & ML Observability** to AgentSentrix 
 MLflow runs 100% locally by default storing experiment data under `./mlruns`.
 
 ### Starting the Local MLflow UI:
-```bash
-# Launch MLflow tracking server on http://localhost:5000
-.venv\Scripts\mlflow.exe ui --port 5000
+
+**Recommended (SQLite Database Backend — Full Features & Traces):**
+```powershell
+.venv\Scripts\mlflow.exe ui --port 5000 --backend-store-uri sqlite:///mlflow.db
 ```
-Open `http://localhost:5000` in your web browser to view the **AgentSentrix_Risk_Evaluations** experiment dashboard.
+
+**Alternative (Local Filesystem `./mlruns` Mode):**
+```powershell
+$env:MLFLOW_ALLOW_FILE_STORE="true"; .venv\Scripts\mlflow.exe ui --port 5000
+```
+
+Open `http://localhost:5000` in your web browser. 
+
+> **Important UI Navigation Note**:
+> In MLflow 3.x, use the top-left sidebar toggle to switch from **`GenAI`** mode to **`Model training`** mode.
+> Under **`Model training`** $\rightarrow$ **`AgentSentrix_Risk_Evaluations`**, you will see all logged security runs, risk score matrices ($T0, T1, T2$), execution latency ($ms$), and operator override false-positive signals.
 
 ### Tracked Metrics & Parameters:
 | Metric / Tag | Type | Description |
