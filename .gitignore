@@ -70,6 +70,7 @@ Thumbs.db
 data/raw/
 data/processed/
 data/sessions/
+data/exports/
 data/test_shims/
 data/*.duckdb
 data/*.duckdb.wal
@@ -80,3 +81,8 @@ data/*.duckdb.wal
 *.duckdb.wal
 *.jsonl
 !data/seed/*.jsonl
+
+# MLflow Experiment Tracking Runs
+mlruns/
+.mlruns/
+

@@ -148,6 +148,20 @@ async def post_decide(request: Request, body: DecisionRequest) -> dict[str, Any]
         envelope = WsEnvelope(type=WsType.DECISION, data=dec_update.model_dump(mode="json"))
         await ws_manager.broadcast(envelope)
 
+    # Log MLflow False-Positive / Human Override telemetry signal
+    try:
+        from ..analytics.mlflow_tracker import MLflowTracker
+        tracker = MLflowTracker()
+        verdict_str = body.verdict.value if hasattr(body.verdict, "value") else str(body.verdict)
+        tracker.log_human_override(
+            event_id=body.event_id,
+            original_verdict="quarantined",
+            new_verdict=verdict_str,
+            note=body.note
+        )
+    except Exception as exc:
+        logger.warning(f"[REST] Failed to log MLflow human override: {exc}")
+
     logger.info(f"[REST] /decide event '{body.event_id}' -> Verdict: {body.verdict.value} (Resolved: {resolved})")
 
     return {

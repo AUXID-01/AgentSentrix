@@ -40,6 +40,11 @@ class MultiTierEvaluator(RiskEngine):
         self.ollama_url = ollama_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
         self.ollama_model = ollama_model or os.getenv("OLLAMA_MODEL", "llama3.2:latest")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
+        try:
+            from ..analytics.mlflow_tracker import MLflowTracker
+            self.mlflow_tracker = MLflowTracker()
+        except Exception:
+            self.mlflow_tracker = None
 
     def compute_action_hash(self, event: AgentEvent) -> str:
         """Compute SHA256 hash of normalized action payload for caching."""
@@ -84,6 +89,8 @@ class MultiTierEvaluator(RiskEngine):
             )
             self.cache.set_verdict(action_hash, assessment)
             event.latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            if self.mlflow_tracker:
+                self.mlflow_tracker.log_assessment(event, assessment)
             logger.info(f"[EVALUATOR] [FAST-PATH EXIT] Tier 0 -> Score: {t0_score} | Verdict: {verdict.value} | Latency: {event.latency_ms}ms")
             return assessment, blast_radius
 
@@ -150,6 +157,8 @@ class MultiTierEvaluator(RiskEngine):
         # Cache the result
         self.cache.set_verdict(action_hash, assessment)
         event.latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        if self.mlflow_tracker:
+            self.mlflow_tracker.log_assessment(event, assessment)
         logger.info(f"[EVALUATOR] [COMPOSITE DECISION] Event '{event.id}' -> Score: {final_score}/100 | Verdict: {final_verdict.value} | Latency: {event.latency_ms}ms")
         return assessment, blast_radius
 
