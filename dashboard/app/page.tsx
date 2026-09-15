@@ -6,8 +6,16 @@ import EventFeed from '../components/EventFeed';
 import RiskGauge from '../components/RiskGauge';
 import ThreatCanvas from '../components/ThreatCanvas';
 import { graphReducer, initialGraphState } from '../lib/graphReducer';
+import { normalizeEvent } from '../lib/normalizeEvent';
 import { AgentSentrixWsClient, ConnectionStatus } from '../lib/ws';
 import { AgentEvent, GraphNode } from '../types/events';
+
+interface SystemLog {
+  id: string;
+  time: string;
+  level: 'info' | 'warn' | 'error' | 'success';
+  msg: string;
+}
 
 export default function DashboardPage() {
   const [graphState, dispatchGraph] = useReducer(graphReducer, initialGraphState);
@@ -20,42 +28,98 @@ export default function DashboardPage() {
     bus?: boolean;
   } | null>(null);
 
+  const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
+
+  const addLog = (level: 'info' | 'warn' | 'error' | 'success', msg: string) => {
+    const time = new Date().toLocaleTimeString();
+    const id = Math.random().toString(36).substring(2, 9);
+    setSystemLogs((prev) => [{ id, time, level, msg }, ...prev.slice(0, 49)]);
+  };
+
   useEffect(() => {
-    // 1. Initial REST fetch for current graph snapshot & health
-    fetch('http://localhost:8000/graph')
+    const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const apiPort = process.env.NEXT_PUBLIC_API_PORT || '7777';
+
+    addLog('info', `Connecting to AgentSentrix API Gateway (http://${apiHost}:${apiPort})...`);
+
+    // 1. Initial REST fetch for current graph snapshot, health & event history
+    fetch(`http://${apiHost}:${apiPort}/graph`)
       .then((res) => (res.ok ? res.json() : null))
       .then((snapshot) => {
-        if (snapshot) dispatchGraph({ type: 'SET_SNAPSHOT', payload: snapshot });
+        if (snapshot) {
+          dispatchGraph({ type: 'SET_SNAPSHOT', payload: snapshot });
+          addLog('info', `Topology snapshot loaded (${snapshot.nodes?.length || 0} nodes, ${snapshot.links?.length || 0} links)`);
+        }
       })
-      .catch((err) => console.log('Backend server /graph fetch error:', err));
+      .catch((err) => {
+        addLog('warn', `Server /graph offline: ${err.message || err}`);
+      });
 
-    fetch('http://localhost:8000/health')
+    fetch(`http://${apiHost}:${apiPort}/health`)
       .then((res) => (res.ok ? res.json() : null))
-      .then((health) => setServerHealth(health))
-      .catch(() => setServerHealth(null));
+      .then((health) => {
+        setServerHealth(health);
+        if (health) {
+          addLog('success', `Health check OK — Redis: ${health.redis ? 'ONLINE' : 'OFFLINE'}, DuckDB: ${health.duckdb ? 'ONLINE' : 'OFFLINE'}`);
+        }
+      })
+      .catch(() => {
+        setServerHealth(null);
+        addLog('error', 'Backend server unreachable on port 7777.');
+      });
+
+    fetch(`http://${apiHost}:${apiPort}/events?limit=50`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((resData) => {
+        if (resData && Array.isArray(resData.events) && resData.events.length > 0) {
+          const normalized = resData.events.map((e: any) => normalizeEvent(e));
+          setEvents(normalized);
+          addLog('info', `Fetched ${normalized.length} historical events from DuckDB analytics storage.`);
+        }
+      })
+      .catch(() => {});
+
+    // Periodic health poll every 3 seconds
+    const healthInterval = setInterval(() => {
+      fetch(`http://${apiHost}:${apiPort}/health`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((health) => setServerHealth(health))
+        .catch(() => setServerHealth(null));
+    }, 3000);
 
     // 2. Connect WebSocket
     const client = new AgentSentrixWsClient({
-      url: 'ws://localhost:8000/ws',
-      onEvent: (event) => {
-        setEvents((prev) => [event, ...prev]);
-        dispatchGraph({ type: 'ADD_EVENT', payload: event });
+      url: `ws://${apiHost}:${apiPort}/ws`,
+      onEvent: (rawEvent) => {
+        const normEvt = normalizeEvent(rawEvent);
+        setEvents((prev) => [normEvt, ...prev]);
+        dispatchGraph({ type: 'ADD_EVENT', payload: normEvt });
+
+        const logLvl = normEvt.verdict === 'blocked' ? 'error' : normEvt.verdict === 'quarantined' ? 'warn' : 'info';
+        addLog(logLvl, `[${normEvt.verdict.toUpperCase()}] ${normEvt.agent_id} → ${normEvt.tool_name || normEvt.command || normEvt.event_type} (Risk: ${normEvt.risk.score})`);
       },
       onSnapshot: (snapshot) => {
         dispatchGraph({ type: 'SET_SNAPSHOT', payload: snapshot });
       },
-      onStatusChange: (status) => setWsStatus(status),
+      onStatusChange: (status) => {
+        setWsStatus(status);
+        if (status === 'connected') {
+          addLog('success', 'WebSocket real-time telemetry stream CONNECTED.');
+        } else if (status === 'disconnected') {
+          addLog('warn', 'WebSocket disconnected. Retrying...');
+        }
+      },
     });
 
     client.connect();
 
     return () => {
+      clearInterval(healthInterval);
       client.disconnect();
     };
   }, []);
 
   const handleSelectNode = (node: GraphNode) => {
-    // Find matching event if node has event_id
     const targetEvent = events.find(
       (e) => e.event_id === node.id || e.event_id === node.event_id
     );
@@ -63,7 +127,6 @@ export default function DashboardPage() {
     if (targetEvent) {
       setSelectedEvent(targetEvent);
     } else {
-      // Create synthetic event display for node
       const dummyEvt: AgentEvent = {
         event_id: node.id,
         session_id: 'live_session',
@@ -102,12 +165,13 @@ export default function DashboardPage() {
     if (selectedEvent && selectedEvent.event_id === eventId) {
       setSelectedEvent({ ...selectedEvent, verdict: newVerdict });
     }
+    addLog('success', `Quarantine action '${eventId}' resolved to ${newVerdict.toUpperCase()} by operator.`);
   };
 
   return (
     <main className="flex flex-col h-screen w-screen bg-background overflow-hidden p-4 space-y-4">
       {/* Top Navbar */}
-      <header className="glass-panel rounded-xl px-6 py-3 flex items-center justify-between border border-surface-border">
+      <header className="glass-panel rounded-xl px-6 py-3 flex items-center justify-between border border-surface-border shrink-0">
         <div className="flex items-center space-x-3">
           <div className="w-8 h-8 rounded-lg bg-indigo-600/30 border border-indigo-500/50 flex items-center justify-center font-mono font-bold text-indigo-400">
             AS
@@ -130,7 +194,7 @@ export default function DashboardPage() {
           <div className="flex items-center space-x-2 bg-surface/60 px-3 py-1.5 rounded-lg border border-surface-border">
             <span className="text-slate-400 text-[10px]">INFRA:</span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                 serverHealth?.redis
                   ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                   : 'bg-rose-950 text-rose-400 border border-rose-800'
@@ -139,7 +203,7 @@ export default function DashboardPage() {
               REDIS: {serverHealth?.redis ? 'OK' : 'OFFLINE'}
             </span>
             <span
-              className={`px-1.5 py-0.5 rounded text-[10px] ${
+              className={`px-1.5 py-0.5 rounded text-[10px] font-semibold ${
                 serverHealth?.duckdb
                   ? 'bg-emerald-950 text-emerald-400 border border-emerald-800'
                   : 'bg-rose-950 text-rose-400 border border-rose-800'
@@ -169,13 +233,60 @@ export default function DashboardPage() {
 
       {/* Main Command Dashboard Layout */}
       <div className="flex-1 grid grid-cols-12 gap-4 min-h-0">
-        {/* Left Column: 3D Threat Canvas (8 cols) */}
-        <section className="col-span-8 h-full min-h-0 relative">
-          <ThreatCanvas
-            nodes={graphState.nodes}
-            links={graphState.links}
-            onSelectNode={handleSelectNode}
-          />
+        {/* Left Column: 3D Threat Canvas + System Execution Console (8 cols) */}
+        <section className="col-span-8 flex flex-col h-full min-h-0 space-y-3">
+          <div className="flex-1 min-h-0 relative">
+            <ThreatCanvas
+              nodes={graphState.nodes}
+              links={graphState.links}
+              onSelectNode={handleSelectNode}
+            />
+          </div>
+
+          {/* System Execution Log Console Terminal Box */}
+          <div className="h-48 shrink-0 glass-panel rounded-xl border border-surface-border bg-slate-950/90 p-3.5 flex flex-col overflow-hidden font-mono text-xs shadow-xl">
+            <div className="flex items-center justify-between pb-2 mb-1.5 border-b border-slate-800 text-[10px] text-slate-400 font-bold uppercase tracking-wider shrink-0">
+              <span className="flex items-center space-x-2">
+                <span className="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span>SYSTEM EXECUTION LOG CONSOLE</span>
+              </span>
+              <div className="flex items-center space-x-3 text-[10px]">
+                <span>{systemLogs.length} LOGS RECORDED</span>
+                {systemLogs.length > 0 && (
+                  <button
+                    onClick={() => setSystemLogs([])}
+                    className="text-slate-500 hover:text-slate-300 transition-colors uppercase tracking-wider font-bold"
+                  >
+                    [CLEAR LOGS]
+                  </button>
+                )}
+              </div>
+            </div>
+            <div className="flex-1 overflow-y-auto pr-1 space-y-1 text-[11px] font-mono scrollbar-thin scrollbar-thumb-slate-800 scrollbar-track-transparent">
+              {systemLogs.length === 0 ? (
+                <div className="text-slate-600 text-[10px] italic py-2">
+                  System log console active — waiting for telemetry events...
+                </div>
+              ) : (
+                systemLogs.map((log) => {
+                  const colorClass =
+                    log.level === 'error'
+                      ? 'text-rose-400 font-semibold'
+                      : log.level === 'warn'
+                      ? 'text-amber-400'
+                      : log.level === 'success'
+                      ? 'text-emerald-400'
+                      : 'text-slate-300';
+                  return (
+                    <div key={log.id} className="flex items-start space-x-2 hover:bg-slate-900/50 p-0.5 rounded transition-colors">
+                      <span className="text-slate-500 text-[10px] shrink-0">[{log.time}]</span>
+                      <span className={`${colorClass} break-all font-mono leading-tight`}>{log.msg}</span>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          </div>
         </section>
 
         {/* Right Column: Risk Gauge & Live Event Feed (4 cols) */}
@@ -205,3 +316,4 @@ export default function DashboardPage() {
     </main>
   );
 }
+

@@ -24,8 +24,8 @@ export class AgentSentrixWsClient {
   public onStatusChange?: (status: ConnectionStatus) => void;
 
   constructor(options: WsClientOptions = {}) {
-    // Default to localhost:8000 if not specified
-    this.baseUrl = options.url || 'ws://localhost:8000/ws';
+    // Default to localhost:7777 if not specified
+    this.baseUrl = options.url || 'ws://localhost:7777/ws';
     this.onEvent = options.onEvent;
     this.onSnapshot = options.onSnapshot;
     this.onStatusChange = options.onStatusChange;
