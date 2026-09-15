@@ -55,11 +55,35 @@ class SimulationRunner:
         quarantined_cnt = 0
         blocked_cnt = 0
 
+        from sim.langgraph_agents import build_agent_stategraph, SimulatedToolCall, HumanMessage
+
         for persona in SIMULATION_SCENARIOS:
-            logger.info(f"Running persona: {persona.name} ({persona.agent_id}) [{persona.model}]")
+            print(f"\n[LANGGRAPH ENGINE] -- Instantiating StateGraph for Agent Persona: {persona.name} ({persona.agent_id})")
+            print(f"                   Framework: {persona.framework} | Model: {persona.model} | Task: '{persona.task_prompt}'")
+            
+            # Construct LangGraph StateGraph workflow
+            tool_calls = [
+                SimulatedToolCall(s.action_type, s.target_kind, s.target_label, s.target_path, s.payload)
+                for s in persona.steps
+            ]
+            graph_app = build_agent_stategraph(persona.agent_id, persona.name, tool_calls)
+
+            # Initial state for LangGraph workflow execution
+            langgraph_state = {
+                "messages": [HumanMessage(content=persona.task_prompt)],
+                "agent_id": persona.agent_id,
+                "persona_name": persona.name,
+                "current_step": 0,
+                "session_id": self.session_id,
+                "events_generated": []
+            }
+
             last_event_id: Optional[str] = None
             
-            for step in persona.steps:
+            for step_idx, step in enumerate(persona.steps, start=1):
+                # Execute LangGraph node step
+                langgraph_state = await graph_app.ainvoke(langgraph_state)
+                
                 event = AgentEvent(
                     id=f"evt_sim_{uuid.uuid4().hex[:12]}",
                     session_id=self.session_id,
@@ -83,10 +107,16 @@ class SimulationRunner:
                     parent_id=last_event_id
                 )
 
-                # Assess Risk
+                # Assess Risk via MultiTierEvaluator
                 risk, blast = await self.evaluator.assess(event)
                 event.risk = risk
                 event.blast_radius = blast
+
+                # Detailed Developer Telemetry Log
+                print(
+                    f"  |- [STEP #{step_idx}] Tool: {step.action_type.value:<12} | Target: {step.target_label:<20} "
+                    f"| Verdict: {risk.verdict.value.upper():<11} | Score: {risk.score:3d}/100 | Blast: {blast.score}"
+                )
 
                 # Publish Event to Bus
                 await self.bus.publish(event)
@@ -125,7 +155,6 @@ class SimulationRunner:
                 elif risk.verdict == Verdict.QUARANTINED:
                     quarantined_cnt += 1
                     if auto_resolve_quarantine:
-                        # Create and resolve quarantine state
                         self.quarantine_mgr.create_quarantine_future(event.id, event.model_dump(mode="json"))
                         self.quarantine_mgr.resolve_quarantine(event.id, Verdict.QUARANTINED, "Simulation auto-held")
                 elif risk.verdict == Verdict.BLOCKED:

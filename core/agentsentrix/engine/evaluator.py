@@ -30,15 +30,15 @@ class MultiTierEvaluator(RiskEngine):
         self,
         policy_loader: Optional[PolicyLoader] = None,
         cache: Optional[StateCache] = None,
-        ollama_url: str = "http://localhost:11434",
-        ollama_model: str = "qwen2.5-coder:1.5b",
+        ollama_url: Optional[str] = None,
+        ollama_model: Optional[str] = None,
         groq_api_key: Optional[str] = None
     ) -> None:
         self.policy_loader = policy_loader or PolicyLoader()
         self.cache = cache or StateCache()
         self.blast_calculator = BlastRadiusCalculator()
-        self.ollama_url = ollama_url
-        self.ollama_model = ollama_model
+        self.ollama_url = ollama_url or os.getenv("OLLAMA_URL", "http://localhost:11434")
+        self.ollama_model = ollama_model or os.getenv("OLLAMA_MODEL", "llama3.2:latest")
         self.groq_api_key = groq_api_key or os.getenv("GROQ_API_KEY")
 
     def compute_action_hash(self, event: AgentEvent) -> str:
@@ -68,6 +68,7 @@ class MultiTierEvaluator(RiskEngine):
         # -------------------------------------------------------------
         t0_result = self.policy_loader.evaluate(event)
         t0_score = t0_result.max_score if t0_result.matched else 0
+        logger.info(f"[EVALUATOR] [TIER 0] Rule Match: {t0_result.matched} | Score: {t0_score} | Rules: {t0_result.matched_rule_ids}")
 
         # Fast path exit for high confidence Tier 0 hits (score >= 75 or explicit low risk safe read <= 20)
         if t0_result.matched and (t0_score >= 75 or t0_score <= 20):
@@ -83,12 +84,14 @@ class MultiTierEvaluator(RiskEngine):
             )
             self.cache.set_verdict(action_hash, assessment)
             event.latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+            logger.info(f"[EVALUATOR] [FAST-PATH EXIT] Tier 0 -> Score: {t0_score} | Verdict: {verdict.value} | Latency: {event.latency_ms}ms")
             return assessment, blast_radius
 
         # -------------------------------------------------------------
         # Tier 1 Evaluation (~50ms) - Local Ollama
         # -------------------------------------------------------------
         t1_score = await self._eval_tier1_ollama(event)
+        logger.info(f"[EVALUATOR] [TIER 1] Local Ollama ({self.ollama_model}) -> Score: {t1_score}")
 
         # Combine Tier 0 and Tier 1 scores
         combined_score = max(t0_score, t1_score if t1_score is not None else 0)
@@ -100,9 +103,11 @@ class MultiTierEvaluator(RiskEngine):
         t2_score: Optional[int] = None
         t2_rationale: Optional[str] = None
         if 30 <= combined_score <= 70:
+            logger.info(f"[EVALUATOR] [TIER 2 TRIGGERED] Score {combined_score} in ambiguous band (30-70). Invoking Groq LLM-as-a-Judge...")
             t2_res = await self._eval_tier2_groq(event, combined_score)
             if t2_res:
                 t2_score, t2_rationale = t2_res
+                logger.info(f"[EVALUATOR] [TIER 2 RESULT] Groq Score: {t2_score} | Rationale: {t2_rationale}")
 
         # Calculate final composite score
         scores = [t0_score]
@@ -145,6 +150,7 @@ class MultiTierEvaluator(RiskEngine):
         # Cache the result
         self.cache.set_verdict(action_hash, assessment)
         event.latency_ms = round((time.perf_counter() - start_time) * 1000, 2)
+        logger.info(f"[EVALUATOR] [COMPOSITE DECISION] Event '{event.id}' -> Score: {final_score}/100 | Verdict: {final_verdict.value} | Latency: {event.latency_ms}ms")
         return assessment, blast_radius
 
     async def _eval_tier1_ollama(self, event: AgentEvent) -> Optional[int]:
