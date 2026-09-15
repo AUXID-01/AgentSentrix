@@ -62,7 +62,7 @@ rules:
     name: "Dangerous Git Operations"
     description: "Detects forced git pushes or push actions to non-standard remote repositories."
     action_types: ["git_op", "shell_exec", "tool_call"]
-    score: 85
+    score: 65
     verdict: "quarantined"
     payload_patterns:
       - "(?i)git\\s+push.*(--force|-f)\\b"
@@ -72,7 +72,7 @@ rules:
     name: "Obfuscated Base64 Command Execution"
     description: "Detects execution of base64 encoded strings."
     action_types: ["shell_exec", "tool_call"]
-    score: 80
+    score: 60
     verdict: "quarantined"
     payload_patterns:
       - "(?i)base64\\s+(-d|--decode)\\s*\\|\\s*(bash|sh|zsh|python)"
@@ -82,7 +82,7 @@ rules:
     name: "Suspicious Outbound Network Call"
     description: "Detects network egress requests targeting raw external IP addresses."
     action_types: ["net_egress", "shell_exec", "tool_call"]
-    score: 75
+    score: 55
     verdict: "quarantined"
     path_patterns:
       - "http://[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}\\.[0-9]{1,3}.*"

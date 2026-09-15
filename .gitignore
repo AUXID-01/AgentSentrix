@@ -2,6 +2,7 @@
 .env
 .env.*
 !.env.example
+!docker/target_repo/.env
 
 # Python
 __pycache__/
@@ -65,9 +66,17 @@ Thumbs.db
 *.swp
 *.swo
 
-# Data & Output Files
+# AgentSentrix Runtime Data & Output Files
 data/raw/
 data/processed/
+data/sessions/
+data/test_shims/
+data/*.duckdb
+data/*.duckdb.wal
 *.sqlite
 *.sqlite3
 *.db
+*.duckdb
+*.duckdb.wal
+*.jsonl
+!data/seed/*.jsonl

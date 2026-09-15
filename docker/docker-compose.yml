@@ -1,0 +1,14 @@
+version: '3.8'
+
+services:
+  agentsentrix-sandbox:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: agentsentrix-sandbox
+    volumes:
+      - ./target_repo:/app/target_repo
+    environment:
+      - PYTHONUNBUFFERED=1
+    tty: true
+    stdin_open: true
