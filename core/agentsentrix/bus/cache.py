@@ -11,7 +11,7 @@ logger = logging.getLogger("agentsentrix.cache")
 class StateCache:
     """Cache and Quarantine State Store supporting Redis with in-memory fallback."""
 
-    def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0, socket_timeout: float = 2.0) -> None:
+    def __init__(self, host: str = "localhost", port: int = 6379, db: int = 0, socket_timeout: float = 0.5) -> None:
         self.host = host
         self.port = port
         self.db = db
