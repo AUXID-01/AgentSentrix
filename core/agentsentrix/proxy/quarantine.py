@@ -9,15 +9,17 @@ logger = logging.getLogger("agentsentrix.proxy.quarantine")
 class QuarantineManager:
     """
     Manages in-flight quarantined MCP tool calls awaiting human approval.
-    Synchronizes pending and resolved quarantine states with Redis StateCache.
+    Synchronizes pending and resolved quarantine states with Redis StateCache
+    and broadcasts instant WebSocket quarantine push notifications.
     """
 
-    def __init__(self, cache: Optional[StateCache] = None) -> None:
+    def __init__(self, cache: Optional[StateCache] = None, ws_manager: Optional[Any] = None) -> None:
         self.cache = cache
+        self.ws_manager = ws_manager
         self.pending_futures: dict[str, asyncio.Future[dict[str, Any]]] = {}
 
     def create_quarantine_future(self, event_id: str, event_data: Optional[dict[str, Any]] = None) -> asyncio.Future[dict[str, Any]]:
-        """Create and store an asyncio.Future for a quarantined event and sync to StateCache."""
+        """Create and store an asyncio.Future for a quarantined event, sync to StateCache, and push WS frame."""
         try:
             loop = asyncio.get_running_loop()
         except RuntimeError:
@@ -36,6 +38,18 @@ class QuarantineManager:
             if event_data:
                 data.update(event_data)
             self.cache.set_quarantine(event_id, data)
+
+        # Broadcast instant quarantine_held frame to active WebSockets
+        if self.ws_manager:
+            try:
+                from ..schema.ws import WsEnvelope, WsType
+                held_data = {"event_id": event_id, "status": "quarantined"}
+                if event_data:
+                    held_data.update(event_data)
+                envelope = WsEnvelope(type=WsType.QUARANTINE_HELD, data=held_data)
+                asyncio.create_task(self.ws_manager.broadcast(envelope))
+            except Exception as exc:
+                logger.warning(f"Failed to broadcast WebSocket quarantine_held frame: {exc}")
 
         return future
 

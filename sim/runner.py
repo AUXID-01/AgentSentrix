@@ -56,11 +56,19 @@ class SimulationRunner:
         blocked_cnt = 0
 
         from sim.langgraph_agents import build_agent_stategraph, SimulatedToolCall, HumanMessage
+        from core.agentsentrix.sdk import AgentSentrixCallbackHandler, SecurityBlockError
 
         for persona in SIMULATION_SCENARIOS:
             print(f"\n[LANGGRAPH ENGINE] -- Instantiating StateGraph for Agent Persona: {persona.name} ({persona.agent_id})")
             print(f"                   Framework: {persona.framework} | Model: {persona.model} | Task: '{persona.task_prompt}'")
             
+            # Attach public SDK Callback Handler
+            sdk_handler = AgentSentrixCallbackHandler(
+                server_url="http://localhost:7777",
+                agent_id=persona.agent_id,
+                agent_name=persona.name
+            )
+
             # Construct LangGraph StateGraph workflow
             tool_calls = [
                 SimulatedToolCall(s.action_type, s.target_kind, s.target_label, s.target_path, s.payload)
@@ -81,6 +89,12 @@ class SimulationRunner:
             last_event_id: Optional[str] = None
             
             for step_idx, step in enumerate(persona.steps, start=1):
+                # Public SDK Callback Handler Interception Hook
+                try:
+                    sdk_handler.on_tool_start({"name": step.action_type.value}, step.payload)
+                except SecurityBlockError:
+                    pass
+
                 # Execute LangGraph node step
                 langgraph_state = await graph_app.ainvoke(langgraph_state)
                 

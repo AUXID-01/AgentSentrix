@@ -222,3 +222,49 @@ class AgentSentrixSDK:
             raise exc
 
         return Verdict.ALLOWED
+
+try:
+    from langchain_core.callbacks.base import BaseCallbackHandler
+except ImportError:
+    class BaseCallbackHandler:
+        pass
+
+class AgentSentrixCallbackHandler(BaseCallbackHandler):
+    """
+    Public LangChain & LangGraph Callback Handler for AgentSentrix security interception.
+    Intercepts agent tool calls (`on_tool_start`), sends event telemetry to AgentSentrix security gateway,
+    and raises SecurityBlockError if an action is BLOCKED.
+    """
+    def __init__(
+        self,
+        server_url: str = "http://localhost:7777",
+        agent_id: str = "default-agent",
+        agent_name: str = "LangGraph Agent",
+        fail_safe: bool = True
+    ) -> None:
+        super().__init__()
+        self.sdk = AgentSentrixSDK(
+            server_url=server_url,
+            agent_id=agent_id,
+            agent_name=agent_name,
+            fail_safe=fail_safe
+        )
+
+    def on_tool_start(
+        self,
+        serialized: dict[str, Any],
+        input_str: str,
+        **kwargs: Any
+    ) -> None:
+        tool_name = serialized.get("name", "unknown_tool")
+        payload = f"{tool_name}(input={input_str})"
+        verdict = self.sdk._evaluate_sync(
+            agent_id=self.sdk.agent_id,
+            action_type="tool_call",
+            target_kind="shell",
+            target_label=tool_name,
+            raw_payload=payload
+        )
+        if verdict == Verdict.BLOCKED:
+            raise SecurityBlockError(f"Tool execution '{tool_name}' BLOCKED by AgentSentrix security policy.")
+

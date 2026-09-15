@@ -8,6 +8,7 @@ export interface GraphState {
 export type GraphAction =
   | { type: 'SET_SNAPSHOT'; payload: GraphSnapshot }
   | { type: 'ADD_EVENT'; payload: AgentEvent }
+  | { type: 'UPDATE_VERDICT'; payload: { event_id: string; verdict: 'allowed' | 'blocked' | 'quarantined' } }
   | { type: 'CLEAR_GRAPH' };
 
 export const initialGraphState: GraphState = {
@@ -23,6 +24,22 @@ export function graphReducer(state: GraphState, action: GraphAction): GraphState
         nodes: [...nodes],
         links: [...links],
       };
+    }
+
+    case 'UPDATE_VERDICT': {
+      const { event_id, verdict } = action.payload;
+      const updatedNodes = state.nodes.map((n) =>
+        n.id === event_id || n.event_id === event_id ? { ...n, verdict } : n
+      );
+      const updatedLinks = state.links.map((l) => {
+        const srcId = typeof l.source === 'object' ? l.source.id : l.source;
+        const tgtId = typeof l.target === 'object' ? l.target.id : l.target;
+        if (tgtId === event_id || srcId === event_id) {
+          return { ...l, verdict };
+        }
+        return l;
+      });
+      return { nodes: updatedNodes, links: updatedLinks };
     }
 
     case 'ADD_EVENT': {

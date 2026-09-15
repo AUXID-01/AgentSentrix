@@ -6,6 +6,8 @@ export interface WsClientOptions {
   url?: string;
   onEvent?: (event: AgentEvent) => void;
   onSnapshot?: (snapshot: GraphSnapshot) => void;
+  onQuarantineHeld?: (data: any) => void;
+  onDecisionUpdate?: (data: any) => void;
   onStatusChange?: (status: ConnectionStatus) => void;
 }
 
@@ -21,6 +23,8 @@ export class AgentSentrixWsClient {
   public status: ConnectionStatus = 'disconnected';
   public onEvent?: (event: AgentEvent) => void;
   public onSnapshot?: (snapshot: GraphSnapshot) => void;
+  public onQuarantineHeld?: (data: any) => void;
+  public onDecisionUpdate?: (data: any) => void;
   public onStatusChange?: (status: ConnectionStatus) => void;
 
   constructor(options: WsClientOptions = {}) {
@@ -28,6 +32,8 @@ export class AgentSentrixWsClient {
     this.baseUrl = options.url || 'ws://localhost:7777/ws';
     this.onEvent = options.onEvent;
     this.onSnapshot = options.onSnapshot;
+    this.onQuarantineHeld = options.onQuarantineHeld;
+    this.onDecisionUpdate = options.onDecisionUpdate;
     this.onStatusChange = options.onStatusChange;
   }
 
@@ -97,6 +103,10 @@ export class AgentSentrixWsClient {
       this.onEvent?.(envelope.data as AgentEvent);
     } else if (envelope.type === 'snapshot' && envelope.data) {
       this.onSnapshot?.(envelope.data as GraphSnapshot);
+    } else if (envelope.type === 'quarantine_held' && envelope.data) {
+      this.onQuarantineHeld?.(envelope.data);
+    } else if (envelope.type === 'decision_update' && envelope.data) {
+      this.onDecisionUpdate?.(envelope.data);
     } else if (envelope.type === 'pong') {
       // Heartbeat ack
     }

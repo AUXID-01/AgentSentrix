@@ -59,6 +59,8 @@ async def get_health(request: Request) -> dict[str, Any]:
 async def ingest_event(request: Request, event_dict: dict[str, Any]) -> dict[str, Any]:
     """Ingest external AgentEvent telemetry from simulation runner or sensors into active server pipeline."""
     bus = getattr(request.app.state, "bus", None)
+    quarantine_mgr = getattr(request.app.state, "quarantine_mgr", None)
+    ws_manager = getattr(request.app.state, "ws_manager", None)
     if not bus:
         raise HTTPException(status_code=500, detail="EventBus unavailable on server")
     
@@ -66,6 +68,13 @@ async def ingest_event(request: Request, event_dict: dict[str, Any]) -> dict[str
         from ..schema.events import AgentEvent
         event = AgentEvent.model_validate(event_dict)
         await bus.publish(event)
+
+        # Trigger instant WebSocket Quarantine push if verdict is QUARANTINED
+        if event.risk.verdict == Verdict.QUARANTINED and quarantine_mgr:
+            if ws_manager and not quarantine_mgr.ws_manager:
+                quarantine_mgr.ws_manager = ws_manager
+            quarantine_mgr.create_quarantine_future(event.id, event.model_dump(mode="json"))
+
         logger.info(f"[REST] /events/ingest -> Event '{event.id}' ingested successfully.")
         return {"status": "ingested", "event_id": event.id, "seq": event.seq}
     except Exception as exc:

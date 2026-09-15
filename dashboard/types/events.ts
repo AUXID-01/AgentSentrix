@@ -70,11 +70,11 @@ export interface GraphSnapshot {
   timestamp: string;
 }
 
-export type WsMessageType = 'event' | 'snapshot' | 'ping' | 'pong';
+export type WsMessageType = 'event' | 'snapshot' | 'quarantine_held' | 'decision_update' | 'ping' | 'pong';
 
 export interface WsEnvelope {
   type: WsMessageType;
   seq?: number;
-  data?: AgentEvent | GraphSnapshot;
+  data?: any;
   timestamp?: string;
 }

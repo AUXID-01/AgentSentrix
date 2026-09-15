@@ -11,6 +11,7 @@ class WsType(str, Enum):
     HELLO = "hello"
     SNAPSHOT = "snapshot"
     EVENT = "event"
+    QUARANTINE_HELD = "quarantine_held"
     DECISION = "decision_update"
     STATS = "stats"
     ERROR = "error"

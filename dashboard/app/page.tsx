@@ -100,9 +100,27 @@ export default function DashboardPage() {
 
         const logLvl = normEvt.verdict === 'blocked' ? 'error' : normEvt.verdict === 'quarantined' ? 'warn' : 'info';
         addLog(logLvl, `[${normEvt.verdict.toUpperCase()}] ${normEvt.agent_id} → ${normEvt.tool_name || normEvt.command || normEvt.event_type} (Risk: ${normEvt.risk.score})`);
+
+        if (normEvt.verdict === 'quarantined') {
+          setSelectedEvent(normEvt);
+          addLog('warn', `⚡ WS PUSH: Action '${normEvt.event_id}' QUARANTINED — Inspection drawer opened for instant approval!`);
+        }
       },
       onSnapshot: (snapshot) => {
         dispatchGraph({ type: 'SET_SNAPSHOT', payload: snapshot });
+      },
+      onQuarantineHeld: (heldData) => {
+        const evtId = heldData.event_id;
+        addLog('warn', `⚡ WS PUSH: Action '${evtId}' QUARANTINED awaiting instant operator resolution!`);
+      },
+      onDecisionUpdate: (decData) => {
+        const evtId = decData.event_id;
+        const verdict = decData.verdict;
+        setEvents((prev) =>
+          prev.map((e) => (e.event_id === evtId ? { ...e, verdict } : e))
+        );
+        dispatchGraph({ type: 'UPDATE_VERDICT', payload: { event_id: evtId, verdict } });
+        addLog('success', `⚡ WS PUSH: Decision update received -> Event '${evtId}' resolved to ${String(verdict).toUpperCase()}`);
       },
       onStatusChange: (status) => {
         setWsStatus(status);
@@ -165,6 +183,7 @@ export default function DashboardPage() {
     setEvents((prev) =>
       prev.map((e) => (e.event_id === eventId ? { ...e, verdict: newVerdict } : e))
     );
+    dispatchGraph({ type: 'UPDATE_VERDICT', payload: { event_id: eventId, verdict: newVerdict } });
     if (selectedEvent && selectedEvent.event_id === eventId) {
       setSelectedEvent({ ...selectedEvent, verdict: newVerdict });
     }
