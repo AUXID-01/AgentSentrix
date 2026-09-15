@@ -26,6 +26,9 @@ export default function DashboardPage() {
     redis?: boolean;
     duckdb?: boolean;
     bus?: boolean;
+    ollama_online?: boolean;
+    tier1_online?: boolean;
+    degraded_mode?: boolean;
   } | null>(null);
 
   const [systemLogs, setSystemLogs] = useState<SystemLog[]>([]);
@@ -190,6 +193,14 @@ export default function DashboardPage() {
 
         {/* System Badges & WebSocket Status */}
         <div className="flex items-center space-x-4 text-xs font-mono">
+          {/* Tier 1 / Ollama Degraded Badge */}
+          {(serverHealth?.ollama_online === false || serverHealth?.tier1_online === false || events.some((e: any) => e.risk?.rationale?.includes('Tier 1') || e.risk?.degraded_tiers?.includes('tier_1_offline'))) && (
+            <div className="flex items-center space-x-2 bg-amber-950/90 px-3 py-1.5 rounded-lg border border-amber-500/60 animate-pulse text-amber-300 font-mono text-[11px] font-semibold">
+              <span className="w-2 h-2 rounded-full bg-amber-400"></span>
+              <span>Tier 1: Local LLM Offline — Policy Fallback Active</span>
+            </div>
+          )}
+
           {/* Health Badges */}
           <div className="flex items-center space-x-2 bg-surface/60 px-3 py-1.5 rounded-lg border border-surface-border">
             <span className="text-slate-400 text-[10px]">INFRA:</span>

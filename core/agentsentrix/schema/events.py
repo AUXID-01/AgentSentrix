@@ -37,6 +37,7 @@ class RiskAssessment(BaseModel):
     rationale: str = ""
     engine: str = "stub"
     cached: bool = False
+    degraded_tiers: list[str] = Field(default_factory=list)
 
 class BlastRadius(BaseModel):
     files_touched: int = 0

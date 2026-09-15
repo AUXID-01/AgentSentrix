@@ -36,7 +36,12 @@ async def get_health(request: Request) -> dict[str, Any]:
         except Exception as exc:
             logger.warning(f"Error querying DuckDB count in /health: {exc}")
 
-    logger.info(f"[REST] /health called -> Status: Healthy (Redis: {redis_ok}, DuckDB count: {duckdb_count}, Bus Seq: {bus_seq})")
+    evaluator = getattr(request.app.state, "evaluator", None)
+    ollama_ok = False
+    if evaluator and hasattr(evaluator, "is_ollama_online"):
+        ollama_ok = await evaluator.is_ollama_online()
+
+    logger.info(f"[REST] /health called -> Status: Healthy (Redis: {redis_ok}, DuckDB count: {duckdb_count}, Ollama: {ollama_ok})")
 
     return {
         "status": "healthy",
@@ -44,7 +49,10 @@ async def get_health(request: Request) -> dict[str, Any]:
         "redis_connected": redis_ok,
         "duckdb": duckdb_count > 0 or (duckdb_sink is not None),
         "duckdb_event_count": duckdb_count,
-        "bus_current_seq": bus_seq
+        "bus_current_seq": bus_seq,
+        "ollama_online": ollama_ok,
+        "tier1_online": ollama_ok,
+        "degraded_mode": not ollama_ok
     }
 
 @router.post("/events/ingest")

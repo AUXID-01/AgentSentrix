@@ -133,11 +133,17 @@ class MultiTierEvaluator(RiskEngine):
         else:
             final_verdict = Verdict.ALLOWED
 
+        degraded_tiers = []
         rationales = []
         if t0_result.rationale:
             rationales.append(t0_result.rationale)
-        if t1_score is not None and t1_score > 30:
+
+        if t1_score is None:
+            degraded_tiers.append("tier_1_offline")
+            rationales.append("[Tier 1 Local SLM Offline — Policy Fallback Active]")
+        elif t1_score > 30:
             rationales.append(f"Tier 1 (Ollama) elevated score to {t1_score}")
+
         if t2_rationale:
             rationales.append(f"Tier 2 (Groq): {t2_rationale}")
 
@@ -151,7 +157,8 @@ class MultiTierEvaluator(RiskEngine):
             policy_ids=t0_result.matched_rule_ids,
             rationale=" | ".join(rationales),
             engine="MultiTierEvaluator",
-            cached=False
+            cached=False,
+            degraded_tiers=degraded_tiers
         )
 
         # Cache the result
@@ -161,6 +168,15 @@ class MultiTierEvaluator(RiskEngine):
             self.mlflow_tracker.log_assessment(event, assessment)
         logger.info(f"[EVALUATOR] [COMPOSITE DECISION] Event '{event.id}' -> Score: {final_score}/100 | Verdict: {final_verdict.value} | Latency: {event.latency_ms}ms")
         return assessment, blast_radius
+
+    async def is_ollama_online(self) -> bool:
+        """Check if local Ollama SLM endpoint is reachable."""
+        try:
+            async with httpx.AsyncClient(timeout=0.5) as client:
+                resp = await client.get(f"{self.ollama_url}/api/tags")
+                return resp.status_code == 200
+        except Exception:
+            return False
 
     async def _eval_tier1_ollama(self, event: AgentEvent) -> Optional[int]:
         """Call local Ollama endpoint for prompt injection and intent drift evaluation."""
