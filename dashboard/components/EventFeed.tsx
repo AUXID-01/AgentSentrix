@@ -52,16 +52,17 @@ export default function EventFeed({ events, selectedEventId, onSelectEvent }: Ev
             No telemetry events recorded yet.
           </div>
         ) : (
-          filteredEvents.map((evt) => {
+          filteredEvents.map((evt, idx) => {
             const isSelected = evt.event_id === selectedEventId;
             const verdictColor = getVerdictColor(evt.verdict);
             const timeStr = evt.timestamp
               ? new Date(evt.timestamp).toLocaleTimeString()
               : '#';
+            const uniqueKey = evt.event_id ? `${evt.event_id}-${idx}` : `evt-${idx}-${evt.sequence || 0}`;
 
             return (
               <div
-                key={evt.event_id || evt.sequence}
+                key={uniqueKey}
                 onClick={() => onSelectEvent?.(evt)}
                 className={`p-3 rounded-lg border cursor-pointer transition-all ${
                   isSelected

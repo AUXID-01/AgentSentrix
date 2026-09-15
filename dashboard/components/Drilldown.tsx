@@ -41,8 +41,11 @@ export default function Drilldown({
     setDecideError(null);
     setDecideResult(null);
 
+    const apiHost = typeof window !== 'undefined' ? window.location.hostname : 'localhost';
+    const apiPort = process.env.NEXT_PUBLIC_API_PORT || '7777';
+
     try {
-      const response = await fetch('http://localhost:8000/decide', {
+      const response = await fetch(`http://${apiHost}:${apiPort}/decide`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

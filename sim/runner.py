@@ -128,14 +128,14 @@ class SimulationRunner:
                         import urllib.request, json, asyncio
                         payload = json.dumps(evt_data).encode("utf-8")
                         req = urllib.request.Request(
-                            "http://localhost:8000/events/ingest",
+                            "http://localhost:7777/events/ingest",
                             data=payload,
                             headers={"Content-Type": "application/json"},
                             method="POST"
                         )
                         def _sync_post():
                             try:
-                                with urllib.request.urlopen(req, timeout=0.1) as resp:
+                                with urllib.request.urlopen(req, timeout=0.5) as resp:
                                     pass
                             except Exception:
                                 pass
